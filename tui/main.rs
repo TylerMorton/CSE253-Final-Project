@@ -16,26 +16,37 @@
 use std::{error::Error, time::Duration};
 
 use argh::FromArgs;
+use std::sync::{Arc, Mutex};
+use tokio::task;
+use std::collections::VecDeque;
 
 mod app;
 mod crossterm;
-
+mod pcap;
 mod ui;
 
 /// Demo
 #[derive(Debug, FromArgs)]
 struct Cli {
     /// time in ms between two ticks.
-    #[argh(option, default = "250")]
+    //#[argh(option, default = "250")]
+    //tick_rate: u64,
+    #[argh(option, default = "30")]
     tick_rate: u64,
     /// whether unicode symbols are used to improve the overall look of the app
     #[argh(option, default = "true")]
     enhanced_graphics: bool,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let cli: Cli = argh::from_env();
+    let captured_packets: Arc<Mutex<VecDeque<Vec<String>>>> = Arc::new(Mutex::new(VecDeque::new()));
+
+    let packets_clone = Arc::clone(&captured_packets);
+    task::spawn(async move { pcap::capture(packets_clone) });
+
     let tick_rate = Duration::from_millis(cli.tick_rate);
-    crate::crossterm::run(tick_rate, cli.enhanced_graphics)?;
+    crate::crossterm::run(tick_rate, cli.enhanced_graphics, captured_packets)?;
     Ok(())
 }

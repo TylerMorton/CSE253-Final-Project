@@ -3,6 +3,9 @@ use rand::{
     rngs::ThreadRng,
 };
 use ratatui::widgets::ListState;
+use std::sync::{Arc, Mutex};
+use sysinfo::{Networks, System};
+use std::collections::VecDeque;
 
 const TASKS: [&str; 24] = [
     "Item1", "Item2", "Item3", "Item4", "Item5", "Item6", "Item7", "Item8", "Item9", "Item10",
@@ -232,10 +235,18 @@ pub struct App<'a> {
     pub barchart: Vec<(&'a str, u64)>,
     pub servers: Vec<Server<'a>>,
     pub enhanced_graphics: bool,
+    pub system: System,
+    pub networks: Networks,
+    pub new_captured_packets: Arc<Mutex<VecDeque<Vec<String>>>>,
+    pub captured_packets: VecDeque<Vec<String>>,
 }
 
 impl<'a> App<'a> {
-    pub fn new(title: &'a str, enhanced_graphics: bool) -> Self {
+    pub fn new(
+        title: &'a str,
+        enhanced_graphics: bool,
+        new_captured_packets: Arc<Mutex<VecDeque<Vec<String>>>>,
+    ) -> Self {
         let mut rand_signal = RandomSignal::new(0, 100);
         let sparkline_points = rand_signal.by_ref().take(300).collect();
         let mut sin_signal = SinSignal::new(0.2, 3.0, 18.0);
@@ -298,6 +309,10 @@ impl<'a> App<'a> {
                 },
             ],
             enhanced_graphics,
+            system: System::new_all(),
+            networks: Networks::new_with_refreshed_list(),
+            new_captured_packets,
+            captured_packets: VecDeque::new(),
         }
     }
 
@@ -330,9 +345,19 @@ impl<'a> App<'a> {
     }
 
     pub fn on_tick(&mut self) {
+        // Refresh system info
+        self.system.refresh_all();
+        self.networks.refresh_list();
+        self.networks.refresh();
+        let lock = self.new_captured_packets.try_lock();
+        if let Ok(packets) = lock {
+            // performance hit here (Maybe only grab last 10 packets)
+            self.captured_packets = (*packets).clone();
+        }
+
         // Update progress
         self.progress += 0.001;
-        if self.progress > 1.0 {
+        if self.progress > 10.0 {
             self.progress = 0.0;
         }
 

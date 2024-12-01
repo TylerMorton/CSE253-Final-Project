@@ -1,7 +1,9 @@
 use std::{
     error::Error,
     io,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
+    collections::VecDeque
 };
 
 use ratatui::{
@@ -16,7 +18,11 @@ use ratatui::{
 
 use crate::{app::App, ui};
 
-pub fn run(tick_rate: Duration, enhanced_graphics: bool) -> Result<(), Box<dyn Error>> {
+pub fn run(
+    tick_rate: Duration,
+    enhanced_graphics: bool,
+    captured_packets: Arc<Mutex<VecDeque<Vec<String>>>>,
+) -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -25,7 +31,7 @@ pub fn run(tick_rate: Duration, enhanced_graphics: bool) -> Result<(), Box<dyn E
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let app = App::new("Crossterm Demo", enhanced_graphics);
+    let app = App::new("Crossterm Demo", enhanced_graphics, captured_packets);
     let app_result = run_app(&mut terminal, app, tick_rate);
 
     // restore terminal
