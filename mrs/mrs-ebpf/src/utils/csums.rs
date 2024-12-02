@@ -1,4 +1,3 @@
-
 #[inline(always)]
 pub unsafe fn update_ipv4_csum(check: *mut u16, old_addr: u32, new_addr: u32) {
     let mut new_csum: u32 = !(*check as u32) & 0xffff;
