@@ -8,6 +8,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 
+
 pub fn default_if() -> Result<NetworkInterface, &'static str> {
     // Get a vector with all network interfaces found
     let all_interfaces = interfaces();

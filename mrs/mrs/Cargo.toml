@@ -1,0 +1,32 @@
+[package]
+name = "mrs"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+aya = "0.12"
+aya-log = "0.2"
+nix = "0.29"
+clap = { version = "4.1", features = ["derive"] }
+mrs-common = { path = "../mrs-common", features = ["user"] }
+anyhow = "1"
+env_logger = "0.10"
+libc = "0.2"
+log = "0.4"
+tokio = { version = "1.25", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "net",
+    "signal",
+] }
+
+network-types = "0.0.6"
+mac_address = "1.1.7"
+local-ip-address = "0.6.1"
+get_if_addrs = "0.5.3"
+
+[[bin]]
+name = "mrs"
+path = "src/main.rs"
