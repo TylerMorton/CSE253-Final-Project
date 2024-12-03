@@ -111,6 +111,7 @@ dependencies = [
  "memoffset",
  "mrs-common",
  "network-types",
+ "tc-egress-common",
 ]
 
 [[package]]
@@ -196,6 +197,10 @@ dependencies = [
  "quote",
  "unicode-ident",
 ]
+
+[[package]]
+name = "tc-egress-common"
+version = "0.1.0"
 
 [[package]]
 name = "unicode-ident"

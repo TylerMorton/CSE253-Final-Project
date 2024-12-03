@@ -245,65 +245,6 @@ fn try_eth(ctx: &XdpContext) -> Result<u32, u32> {
         }
 
         IpProto::Udp => {
-            // This needs to be fixed no?
-            let udphdr = ptr_at_mut::<UdpHdr>(ctx, EthHdr::LEN + Ipv4Hdr::LEN)
-                .ok_or(xdp_action::XDP_PASS)?;
-            const port_67: u16 = 17408;
-            const port_68: u16 = 17152;
-            unsafe {
-                if ((*udphdr).source == port_67 || (*udphdr).source == port_68)
-                    && ((*udphdr).dest == port_67 || (*udphdr).dest == port_68)
-                    && (*udphdr).len > 248
-                {
-                    debug!(ctx, "Grabbed a DHCP packet?");
-                    let dhcphdr =
-                        ptr_at_mut::<DhcpHdr>(ctx, EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN)
-                            .ok_or(xdp_action::XDP_PASS)?;
-                    debug!(ctx, "op: {:X}, htype: {:X}, hlen: {:X}, hops:{}", (*dhcphdr).op, (*dhcphdr).htype, (*dhcphdr).hlen, (*dhcphdr).hops);
-                    debug!(ctx, "xid: {:X}, secs: {:X}, flags:{:X}", (*dhcphdr).xid, (*dhcphdr).secs, (*dhcphdr).flags);
-                    debug!(ctx, "magic: {:X}", u32::from_be((*dhcphdr).magic));
-                    if u32::from_be((*dhcphdr).magic) != 0x63825363 {
-                        return Ok(xdp_action::XDP_PASS);
-                    }
-                    let dhcp_first_option = ptr_at_mut::<[u8; 4]>(
-                        ctx,
-                        EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + DhcpHdr::LEN,
-                    )
-                    .ok_or(xdp_action::XDP_PASS)?;
-                    if (*dhcp_first_option)[0] == 0x35 && (*dhcp_first_option)[2] == 0x5 {
-                        debug!(ctx, "grabbed an ack packet");
-                        let your_ip: u32 = (*dhcphdr).yiaddr;
-                        let mut chmac: [u8; 6] = [0; 6];
-                        chmac.copy_from_slice(&(*dhcphdr).chaddr[0..6]);
-                        // Grab ip and mac pair
-                        IPMAC_MAP.insert(&chmac, &your_ip, 0).unwrap();
-                    }
-            /*
-                */
-                }
-            }
-            /*
-            let dhcp_cookie = ptr_at_mut::<u32>(ctx, 264).ok_or(xdp_action::XDP_PASS)?;
-            unsafe {
-                if dhcp_cookie == 0x63825363 && (*udphdr).source == 68 && (*udphdr).dest == 67 {
-                    debug!(ctx, "DHCP request confirmed");
-                }
-                if dhcp_cookie == 0x63825363 && (*udphdr).source == 67 && (*udphdr).dest == 68 {
-                    debug!(ctx, "DHCP response confirmed");
-                    let dhcp_options = ptr_at_mut::<[u8; 4]>(ctx, 292).ok_or(xdp_action::XDP_PASS);
-                    if dhcp_options[3] == 0x5 {
-                        debug!(ctx, "DHCP ack confirmed");
-                    }
-                    ARP_CACHE_MAP
-                        .insert(
-                            &u32::from_be_bytes(unsafe { (*arphdr).spa }),
-                            unsafe { &(*arphdr).sha },
-                            0,
-                        )
-                        .unwrap();
-                }
-            }
-            */
             return Ok(xdp_action::XDP_PASS);
         }
 

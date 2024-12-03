@@ -75,9 +75,9 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 
     let _ = tc::qdisc_add_clsact(&opt.eth_iface);
-    let program: &mut SchedClassifier = bpf.program_mut("tc_egress").unwrap().try_into?;
+    let program: &mut SchedClassifier = bpf.program_mut("tc_egress").unwrap().try_into()?;
     program.load()?;
-    program.attach(&opt.iface, TcAttachType::Egress)?;
+    program.attach(&opt.eth_iface, TcAttachType::Egress)?;
 
     let eth_prog: &mut Xdp = bpf.program_mut("xdp_eth").unwrap().try_into()?;
     eth_prog.load()?;

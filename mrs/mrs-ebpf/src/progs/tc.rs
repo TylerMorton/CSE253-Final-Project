@@ -99,8 +99,14 @@ fn try_tc_egress(ctx: TcContext) -> Result<i32, ()> {
     Ok(action)
 }
 
+/*
+#[panic_handler]
+pub fn panic(_info: &core::panic::PanicInfo) -> ! {
+    unsafe { core::hint::unreachable_unchecked() }
+}
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
+*/

@@ -7,6 +7,7 @@ edition = "2021"
 aya-ebpf = "0.1.0"
 aya-log-ebpf = "0.1.0"
 mrs-common = { path = "../mrs-common" }
+tc-egress-common = { path = "../tc-egress-common" }
 network-types = "0.0.7"
 memoffset = "0.9.1"
 
