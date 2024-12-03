@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use aya::{
     include_bytes_aligned,
-    maps::Array,
+    maps::{Array, HashMap, PerfEventArray},
     programs::{tc, SchedClassifier, TcAttachType, Xdp, XdpFlags},
     Bpf,
 };
@@ -12,43 +12,18 @@ use mac_address::MacAddress;
 use mrs_common::{
     ClientMap, HandoverMode, HandoverParams, IfaceMap, IpMacMap, MediumSelection, UserParams,
 };
+use std::ptr::read;
 
+use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
+
+use core::net::Ipv4Addr;
 use tokio::signal::unix::{signal, SignalKind};
 
 mod utils;
 use utils::*;
 
-use clap::Parser;
-use core::net::Ipv4Addr;
-use mrs::{run, load};
-
-#[derive(Debug, Parser)]
-pub struct Opt {
-    #[clap(short, long)]
-    eth_iface: String,
-
-    #[clap(short, long)]
-    wifi_iface: String,
-
-    #[clap(short, long)]
-    plc_iface: String,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let opt = Opt::parse();
-    let mut bpf = load(opt.eth_iface, opt.wifi_iface, opt.plc_iface).unwrap();
-    let _ = run(bpf).await;
-    return Ok(());
-}
-/*
-    let mut stream_int = signal(SignalKind::interrupt())?;
-    let mut stream_quit = signal(SignalKind::quit())?;
-    let mut handover_param = HandoverParams { val: 0 };
-    let user_params = UserParams {
-        //handover_mode: HandoverMode::Auto,
-        handover_mode: HandoverMode::Manual(MediumSelection::Light),
-    };
+pub fn load(eth_iface:String, wifi_iface:String, plc_iface:String) -> Result<Bpf, anyhow::Error> {
     env_logger::init();
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
@@ -80,25 +55,18 @@ async fn main() -> Result<(), anyhow::Error> {
         warn!("failed to initialize eBPF logger: {}", e);
     }
 
-    let _ = tc::qdisc_add_clsact(&opt.eth_iface);
+    let _ = tc::qdisc_add_clsact(&eth_iface);
+
     let program: &mut SchedClassifier = bpf.program_mut("tc_egress").unwrap().try_into()?;
     program.load()?;
-    program.attach(&opt.eth_iface, TcAttachType::Egress)?;
+    program.attach(&eth_iface, TcAttachType::Egress)?;
 
     let eth_prog: &mut Xdp = bpf.program_mut("xdp_eth").unwrap().try_into()?;
     eth_prog.load()?;
-    eth_prog.attach(&opt.eth_iface, XdpFlags::default())
+    eth_prog.attach(&eth_iface, XdpFlags::default())
         .context("failed to attach the ETH XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
 
-    //   let plc_prog: &mut Xdp = bpf.program_mut("xdp_plc").unwrap().try_into()?;
-    //   plc_prog.load()?;
-    //   plc_prog.attach(&opt.plc_iface, XdpFlags::default())
-    //      .context("failed to attach the PLC XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
-
-    //   let wifi_prog: &mut Xdp = bpf.program_mut("xdp_wifi").unwrap().try_into()?;
-    //   wifi_prog.load()?;
-    //   wifi_prog.attach(&opt.wifi_iface, XdpFlags::default())
-    //       .context("failed to attach the WIFI XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
+    //todo: add programs in
 
     // load params map with the good stuff
     let mut ifaces: Array<_, IfaceMap> = Array::try_from(bpf.map_mut("IFACE_MAP").unwrap())?;
@@ -111,9 +79,9 @@ async fn main() -> Result<(), anyhow::Error> {
         .set(
             0,
             IfaceMap {
-                eth_iface: iface_by_name(&opt.eth_iface, &addrs)?,
-                wifi_iface: iface_by_name(&opt.wifi_iface, &addrs)?,
-                plc_iface: iface_by_name(&opt.plc_iface, &addrs)?,
+                eth_iface: iface_by_name(&eth_iface, &addrs)?,
+                wifi_iface: iface_by_name(&wifi_iface, &addrs)?,
+                plc_iface: iface_by_name(&plc_iface, &addrs)?,
             },
             0,
         )
@@ -134,6 +102,24 @@ async fn main() -> Result<(), anyhow::Error> {
     //TODO: Handover params were never meant to be used like this. Instaed it was meant to be for
     //struct definition
 
+    return Ok(bpf);
+ }
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct KeyValue {
+    key: [u8; 6],
+    value: u32
+}
+
+pub async fn run(mut bpf: Bpf/*, mapped_ips: Arc<Mutex<VecDeque<u32>>>*/) -> Result<(), anyhow::Error> {
+    let mut stream_int = signal(SignalKind::interrupt())?;
+    let mut stream_quit = signal(SignalKind::quit())?;
+    let mut handover_param = HandoverParams { val: 0 };
+    let user_params = UserParams {
+        //handover_mode: HandoverMode::Auto,
+        handover_mode: HandoverMode::Manual(MediumSelection::Light),
+    };
     loop {
         let mut handover_arg: Array<_, HandoverParams> =
             Array::try_from(bpf.map_mut("HANDOVER_MAP").unwrap())?;
@@ -141,6 +127,12 @@ async fn main() -> Result<(), anyhow::Error> {
         let mut user_params_map: Array<_, UserParams> =
             Array::try_from(bpf.map_mut("USER_PARAMS_MAP").unwrap())?;
         user_params_map.set(0, user_params, 0)?;
+        let mut events = AsyncPerfEventArray::try_from(bpf.map("EVENTS").unwrap())?;
+        for cpu in online_cpus()? {
+            let mut buf = events.open(cpu, None)?;
+        }
+
+        let poll = poll_buffers(perf_buffers);
         // do the ring buf stuff
         info!("Waiting for Signals...");
         tokio::select! {
@@ -157,9 +149,21 @@ async fn main() -> Result<(), anyhow::Error> {
                     val : 0}
                 };
             },
+            event = events.poll(1000) => {
+                match event {
+                    Ok(data) =>{
+                    let key_value: KeyValue = unsafe { read(data.as_ptr() as *const _)};
+                    println!("Received: key = {:?} value = {}", key_value.key, key_value.value);
+                    },
+                    Err(e) => {
+                        eprintln!("Error receiving event {}", e);
+                    }
+                }
+            }
         }
+    }
         //stream_int.recv().await;
         //signal::ctrl_c().await?;
         info!("continuing the process ...");
+        return Ok(());
     }
-    */

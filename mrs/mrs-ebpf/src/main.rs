@@ -3,13 +3,22 @@
 
 use aya_ebpf::{
     macros::map,
-    maps::{Array, HashMap},
+    maps::{Array, HashMap, PerfEventArray},
 };
 use mrs_common::{ClientMap, HandoverParams, IfaceMap, IpMacMap, UserParams};
 
 // keep all maps here
 #[map]
 pub static IPMAC_MAP: HashMap<[u8; 6], u32> = HashMap::<[u8; 6], u32>::with_max_entries(254, 0);
+
+#[repr(C)]
+pub struct KeyValue {
+    pub key: [u8;6],
+    pub value: u32,
+}
+
+#[map]
+pub static EVENTS: PerfEventArray<KeyValue> = PerfEventArray::<KeyValue>::new(0);
 
 #[map]
 pub static IFACE_MAP: Array<IfaceMap> = Array::<IfaceMap>::with_max_entries(1, 0);
@@ -38,6 +47,9 @@ pub static ARP_CACHE_MAP: HashMap<u32, [u8; 6]> =
 #[map]
 pub static ARP_CLIENT_REQUESTS: HashMap<u32, [u8; 6]> =
     HashMap::<u32, [u8; 6]>::with_max_entries(1024, 0);
+
+#[map]
+pub static IPMACMAP: HashMap<[u8; 6], u32> = HashMap::<[u8; 6], u32>::with_max_entries(100, 0);
 
 #[repr(C)]
 #[derive(Clone, Copy)]

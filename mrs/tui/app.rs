@@ -258,7 +258,7 @@ impl<'a> App<'a> {
             should_quit: false,
             //tabs: TabsState::new(vec!["Tab0", "Arp Spoofing", "DDOS Prevention", "System Performance"]),
             //TODO: Finish
-            tabs: TabsState::new(vec!["Overview", "Arp Spoofing", "System Performance"]),
+            tabs: TabsState::new(vec!["Overview", "System Performance"]),
             show_chart: true,
             progress: 0.0,
             sparkline: Signal {

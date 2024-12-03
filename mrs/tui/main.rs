@@ -42,8 +42,11 @@ struct Cli {
 async fn main() -> Result<(), Box<dyn Error>> {
     let cli: Cli = argh::from_env();
     let captured_packets: Arc<Mutex<VecDeque<Vec<String>>>> = Arc::new(Mutex::new(VecDeque::new()));
-
     let packets_clone = Arc::clone(&captured_packets);
+
+    let mapped_ips = Arc<Mutex<VecDeque<u32>>> = Arc::new(Mutex::new(VecDeque::new()));
+    let mapped_ips_cone = Arc::clone(&mapped_ips);
+
     task::spawn(async move { pcap::capture(packets_clone) });
 
     let tick_rate = Duration::from_millis(cli.tick_rate);

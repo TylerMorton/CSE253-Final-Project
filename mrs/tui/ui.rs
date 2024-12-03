@@ -41,8 +41,8 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     frame.render_widget(tabs, chunks[0]);
     match app.tabs.index {
         0 => draw_first_tab(frame, app, chunks[1]),
-        1 => draw_second_tab(frame, app, chunks[1]),
-        2 => draw_third_tab(frame, app, chunks[1]),
+        //1 => draw_second_tab(frame, app, chunks[1]),
+        1 => draw_third_tab(frame, app, chunks[1]),
         _ => {}
     };
 }
@@ -221,15 +221,15 @@ fn draw_live_monitor(frame: &mut Frame, app: &mut App, area: Rect) {
 
 fn draw_global_charts(frame: &mut Frame, app: &mut App, area: Rect) {
     let constraints = vec![
-        Constraint::Ratio(1, 6),
-        Constraint::Ratio(4, 6),
-        Constraint::Ratio(1, 6),
+        Constraint::Ratio(3, 6),
+        //Constraint::Ratio(4, 6),
+        Constraint::Ratio(3, 6),
     ];
     let chunks = Layout::horizontal(constraints).split(area);
     //draw_charts(frame, app, chunks[0]);
     draw_events(frame, app, chunks[0]);
-    draw_live_monitor(frame, app, chunks[1]);
-    draw_control_panel(frame, app, chunks[2]);
+    //draw_live_monitor(frame, app, chunks[1]);
+    draw_control_panel(frame, app, chunks[1]);
 }
 
 fn draw_first_tab(frame: &mut Frame, app: &mut App, area: Rect) {

@@ -17,36 +17,20 @@ use network_types::{
 
 use core::mem;
 
-#[repr(C)]
-pub struct DhcpHdr {
-    pub op: u8,
-    pub htype: u8,
-    pub hlen: u8,
-    pub hops: u8,
-    pub xid: u32,
-    pub secs: u16,
-    pub flags: u16,
-    pub ciaddr: u32,
-    pub yiaddr: u32,
-    pub siaddr: u32,
-    pub giaddr: u32,
-    pub chaddr: [u8; 16],
-    pub sname: [u8;64],
-    pub file: [u8; 128],
-    pub magic: u32,
-}
-impl DhcpHdr {
-    pub const LEN: usize = mem::size_of::<DhcpHdr>();
-}
-
-// TODO:
-pub struct DhcpOption {}
-
 use mrs_common::{HandoverHdr, HandoverMode, MediumSelection, UserParams};
 
 use crate::{
-    utils::*, ARP_CACHE_MAP, ARP_CLIENT_REQUESTS, CLIENT_MAP, HANDOVER_MAP, IFACE_MAP, IPMAC_MAP,
-    MAC_CACHE_MAP, USER_PARAMS_MAP,
+    progs::tc::{ipmac_exists, ipmac_get}, // TODO: cleanup
+    utils::*,
+    ARP_CACHE_MAP,
+    ARP_CLIENT_REQUESTS,
+    CLIENT_MAP,
+    HANDOVER_MAP,
+    IFACE_MAP,
+    IPMACMAP,
+    IPMAC_MAP,
+    MAC_CACHE_MAP,
+    USER_PARAMS_MAP,
 };
 
 // -- attach this to the program we want to redirect from
@@ -111,9 +95,7 @@ fn try_eth(ctx: &XdpContext) -> Result<u32, u32> {
 
     // filter for ipv4
     let ethertype = match unsafe { (*ethhdr).ether_type } {
-        EtherType::Ipv4 => {
-            EtherType::Ipv4
-        },
+        EtherType::Ipv4 => EtherType::Ipv4,
         EtherType::Arp => EtherType::Arp,
         EtherType::Ipv6 => {
             return Ok(xdp_action::XDP_PASS);
@@ -126,7 +108,7 @@ fn try_eth(ctx: &XdpContext) -> Result<u32, u32> {
     // ARP shenanigans
     if ethertype == EtherType::Arp {
         //TODO: don't readin any packets with src from host
-        return Ok(xdp_action::XDP_PASS);
+        // turn off arp shenanigan return Ok(xdp_action::XDP_PASS);
         let arphdr = ptr_at_mut::<ArpHdr>(ctx, EthHdr::LEN).ok_or(xdp_action::XDP_PASS)?;
 
         match unsafe { (*arphdr).plen } {
@@ -146,71 +128,34 @@ fn try_eth(ctx: &XdpContext) -> Result<u32, u32> {
             );
             return Ok(xdp_action::XDP_DROP);
         }
-        /*
-        let mapped_ip = unsafe { IPMAC_MAP.get(&(*arphdr).sha).unwrap() };
-        if mapped_id != unsafe { (*arphdr).spa } {
-            debug!(ctx, "Dropping potentially unsafe packet");
-            return Ok(xdp_action::XDP_DROP);
-        }
-        */
         let oper = u16::from_be(unsafe { (*arphdr).oper });
-        debug!(ctx, "operation: {}", oper);
         if oper != 1 && oper != 2 {
             debug!(ctx, "Only accepting ARP request/response operations");
             return Ok(xdp_action::XDP_DROP);
         }
-
+        if oper == 1 {
+            debug!(ctx, "ARP - I received an arp request!");
+        }
         if oper == 2 {
-            // TODO: check network tuple not just mac
-            if unsafe { (*arphdr).tha == ifaces.eth_iface.mac } {
-            } else {
-                debug!(ctx, "ARP response not destined for MRS. Dropping.");
+            if !ipmac_exists(unsafe { (*arphdr).sha }) {
+                debug!(ctx, "ARP - Response dropped.");
                 return Ok(xdp_action::XDP_DROP);
             }
-        }
-
-        //TODO: Is    there performance to use [u8;4] instead of u32 from_be?
-        match unsafe { ARP_CACHE_MAP.get(&u32::from_be_bytes((*arphdr).tpa)) } {
-            Some(maccache) => {
-                debug!(ctx, "ARP cache hit.");
-                // Send response
-                let arphdr_resp = generate_arp_resp(arphdr, *maccache, ifaces.eth_iface.ip);
-                return unsafe {
-                    (*arphdr) = arphdr_resp;
-                    match medium_selection {
-                        MediumSelection::Radio => {
-                            debug!(ctx, "sending to plc");
-                            unsafe { (*ethhdr).src_addr = ifaces.plc_iface.mac };
-                            Ok(bpf_redirect(ifaces.plc_iface.idx, 0) as u32)
-                        }
-                        MediumSelection::Light => {
-                            debug!(ctx, "sending to wifi");
-                            Ok(bpf_redirect(ifaces.wifi_iface.idx, 0) as u32)
-                        }
-                    }
-                };
-            }
-            None => {
-                // Do an ARP Broadcast over eth (fwd request but change src)
-                debug!(ctx, "ARP cache miss. Forwarding on eth iface.");
-                ARP_CLIENT_REQUESTS
-                    .insert(
-                        &u32::from_be_bytes(unsafe { (*arphdr).tpa }),
-                        unsafe { &(*arphdr).sha },
-                        0,
-                    )
-                    .unwrap();
-                unsafe {
-                    (*arphdr).sha = ifaces.eth_iface.mac;
-                    (*arphdr).spa = ifaces.eth_iface.ip.to_be_bytes();
-                    return Ok(bpf_redirect(ifaces.eth_iface.idx, 0) as u32);
+            debug!(ctx, "ARP - IP MAC mapping exists.");
+            if let Some(mapip) = ipmac_get(unsafe { (*arphdr).sha }) {
+                debug!(ctx, "The mapped ip is {} the actual ip is {}", u32::from_be(mapip), u32::from_be_bytes(unsafe { (*arphdr).spa }));
+                if u32::from_be(mapip) != unsafe { u32::from_be_bytes((*arphdr).spa) } {
+                    debug!(ctx, "ARP - Response dropped.");
+                    return Ok(xdp_action::XDP_DROP);
                 }
+                debug!(ctx, "ARP - Mapping is valid.");
             }
-        };
+            return Ok(xdp_action::XDP_PASS);
+        }
     }
 
     let iphdr = ptr_at_mut::<Ipv4Hdr>(ctx, EthHdr::LEN).ok_or(xdp_action::XDP_PASS)?;
-    
+
     /*
     if is_auto {
         unsafe {
@@ -248,7 +193,9 @@ fn try_eth(ctx: &XdpContext) -> Result<u32, u32> {
             return Ok(xdp_action::XDP_PASS);
         }
 
-        IpProto::Icmp => {}
+        IpProto::Icmp => {
+            return Ok(xdp_action::XDP_PASS);
+        }
 
         _ => return Ok(xdp_action::XDP_PASS),
     };
