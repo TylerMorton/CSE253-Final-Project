@@ -112,7 +112,23 @@ pub struct KeyValue {
     value: u32
 }
 
-pub async fn run(mut bpf: Bpf/*, mapped_ips: Arc<Mutex<VecDeque<u32>>>*/) -> Result<(), anyhow::Error> {
+pub async fn handle_bufs(ip_map_mux: Arc<Mutex<VecDeque<KeyValue>>>) {
+            let mut buffers = (0..num_cpus)
+                .map(|_| BytesMut::with_capacity(9000))
+                .collect::<Vec<_>>();
+
+            loop {
+                let events = buf.read_events(&mut buffers).await.unwrap();
+                for i in 0..events.read {
+                    let buf = &mut buffers[i];
+                    let key_value = unsafe {ptr::read_unaligned(buf.as_ptr() as *const KeyValue) };
+                    let ip_map = ip_map_mux.lock().unwrap();
+                    ip_map.push_front(key_value);
+                }
+            }
+}
+
+pub async fn run(mut bpf: Bpf, mapped_ips: Arc<Mutex<VecDeque<KeyValue>>>) -> Result<(), anyhow::Error> {
     let mut stream_int = signal(SignalKind::interrupt())?;
     let mut stream_quit = signal(SignalKind::quit())?;
     let mut handover_param = HandoverParams { val: 0 };
@@ -120,50 +136,37 @@ pub async fn run(mut bpf: Bpf/*, mapped_ips: Arc<Mutex<VecDeque<u32>>>*/) -> Res
         //handover_mode: HandoverMode::Auto,
         handover_mode: HandoverMode::Manual(MediumSelection::Light),
     };
-    loop {
-        let mut handover_arg: Array<_, HandoverParams> =
-            Array::try_from(bpf.map_mut("HANDOVER_MAP").unwrap())?;
-        handover_arg.set(0, handover_param, 0)?;
-        let mut user_params_map: Array<_, UserParams> =
-            Array::try_from(bpf.map_mut("USER_PARAMS_MAP").unwrap())?;
-        user_params_map.set(0, user_params, 0)?;
-        let mut events = AsyncPerfEventArray::try_from(bpf.map("EVENTS").unwrap())?;
-        for cpu in online_cpus()? {
-            let mut buf = events.open(cpu, None)?;
-        }
-
-        let poll = poll_buffers(perf_buffers);
-        // do the ring buf stuff
-        info!("Waiting for Signals...");
-        tokio::select! {
-            _ = stream_int.recv() => {
-                info!("Received SIGINT. Exiting...");
-                return Ok(());
-            },
-            _ = stream_quit.recv() => {
-                println!("Received SIGQUIT");
-                handover_param = if handover_param.val == 0 {HandoverParams {
-                    val: 1
-                }} else {
-                    HandoverParams {
-                    val : 0}
-                };
-            },
-            event = events.poll(1000) => {
-                match event {
-                    Ok(data) =>{
-                    let key_value: KeyValue = unsafe { read(data.as_ptr() as *const _)};
-                    println!("Received: key = {:?} value = {}", key_value.key, key_value.value);
-                    },
-                    Err(e) => {
-                        eprintln!("Error receiving event {}", e);
-                    }
-                }
-            }
-        }
+    let mut handover_arg: Array<_, HandoverParams> =
+        Array::try_from(bpf.map_mut("HANDOVER_MAP").unwrap())?;
+    handover_arg.set(0, handover_param, 0)?;
+    let mut user_params_map: Array<_, UserParams> =
+        Array::try_from(bpf.map_mut("USER_PARAMS_MAP").unwrap())?;
+    user_params_map.set(0, user_params, 0)?;
+    let mut events = AsyncPerfEventArray::try_from(bpf.map("EVENTS").unwrap())?;
+    for cpu in online_cpus()? {
+        let mut buf = events.open(cpu, None)?;
+           tokio::task::spawn(async move { handle_bufs(mapped_ips)
+        });
     }
-        //stream_int.recv().await;
-        //signal::ctrl_c().await?;
-        info!("continuing the process ...");
-        return Ok(());
+    // do the ring buf stuff
+    info!("Waiting for Signals...");
+    tokio::select! {
+        _ = stream_int.recv() => {
+            info!("Received SIGINT. Exiting...");
+            return Ok(());
+        },
+        _ = stream_quit.recv() => {
+            println!("Received SIGQUIT");
+            handover_param = if handover_param.val == 0 {HandoverParams {
+                val: 1
+            }} else {
+                HandoverParams {
+                val : 0}
+            };
+        },
+    }
+    //stream_int.recv().await;
+    //signal::ctrl_c().await?;
+    info!("continuing the process ...");
+    return Ok(());
     }
