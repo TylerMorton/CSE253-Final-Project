@@ -10,7 +10,8 @@ use aya_ebpf::{
 use aya_log_ebpf::info;
 use network_types::{
     eth::{EthHdr, EtherType},
-    ip::Ipv4Hdr,
+    ip::{Ipv4Hdr, IpProto},
+    udp::UdpHdr
 };
 
 #[map]
@@ -36,6 +37,18 @@ fn try_tc_egress(ctx: TcContext) -> Result<i32, ()> {
     }
 
     let ipv4hdr: Ipv4Hdr = ctx.load(EthHdr::LEN).map_err(|_| ())?;
+    match ipv4hdr.proto {
+        IpProto::UDP => {
+            debug!(&ctx, "udp egress!");
+            let udphdr: UdpHdr = ctx.load(EthHdr::LEN + Ipv4Hdr::LEN);
+            const port_67: u16 = 17408;
+            const port_68: u16 = 17152;
+            if udphdr.source == port_67 && udphdr.dest == port_68 {
+                debug!(&ctx, "dhcp egress!");
+            }
+        }
+        _ => {}
+    }
     let destination = u32::from_be(ipv4hdr.dst_addr);
 
     let action = if block_ip(destination) {
