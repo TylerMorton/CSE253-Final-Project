@@ -1,3 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["xtask", "mrs", "mrs-common", "tc-egress-bpf"]
+members = [
+	"xtask", "mrs", "mrs-common",
+	"tc-egress-ebpf", "tc-egress",
+	"tc-egress-common"
+]
