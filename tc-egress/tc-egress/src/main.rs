@@ -11,7 +11,7 @@ use tokio::signal;
 
 #[derive(Debug, Parser)]
 struct Opt {
-    #[clap(short, long, default_value = "eth0")]
+    #[clap(short, long, default_value = "wlan0")]
     iface: String,
 }
 
@@ -36,20 +36,20 @@ async fn main() -> Result<(), anyhow::Error> {
     // error adding clsact to the interface if it is already added is harmless
     // the full cleanup can be done with 'sudo tc qdisc del dev eth0 clsact'.
     let _ = tc::qdisc_add_clsact(&opt.iface);
-    let program: &mut SchedClassifier =
-        bpf.program_mut("tc_egress").unwrap().try_into()?;
+    let program: &mut SchedClassifier = bpf.program_mut("tc_egress").unwrap().try_into()?;
     program.load()?;
     program.attach(&opt.iface, TcAttachType::Egress)?;
 
     // (1)
-    let mut blocklist: HashMap<_, u32, u32> =
-        HashMap::try_from(bpf.map_mut("BLOCKLIST").unwrap())?;
+    let mut blocklist: HashMap<_, u32, u32> = HashMap::try_from(bpf.map_mut("BLOCKLIST").unwrap())?;
 
     // (2)
     let block_addr: u32 = Ipv4Addr::new(1, 1, 1, 1).into();
 
     // (3)
     blocklist.insert(block_addr, 0, 0)?;
+    let mut ipmacmap: HashMap<_, [u8; 6], u32> =
+        HashMap::try_from(bpf.map_mut("IPMACMAP").unwrap())?;
 
     info!("Waiting for Ctrl-C...");
     signal::ctrl_c().await?;
