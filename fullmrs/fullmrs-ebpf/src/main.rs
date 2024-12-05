@@ -2,6 +2,7 @@
 #![no_main]
 
 pub mod tc;
+pub mod utils;
 pub mod xdp;
 
 #[panic_handler]

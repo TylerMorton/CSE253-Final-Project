@@ -7,8 +7,7 @@ use std::os::fd::AsRawFd;
 use log::{debug, warn};
 use mio::unix::SourceFd;
 use mio::{Events, Interest, Poll, Token};
-use tokio::signal;
-use tokio_util::sync::CancellationToken;
+use std::net::Ipv4Addr;
 
 #[derive(Debug, Parser)]
 struct Opt {
@@ -55,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     let program: &mut SchedClassifier = ebpf.program_mut("fullmrs_tc").unwrap().try_into()?;
     program.load()?;
     program
-        .attach(&opt.iface, TcAttachType::Ingress)
+        .attach(&opt.iface, TcAttachType::Egress)
         .context("failed to attach the TC program with default flags")?;
 
     let mut ring = RingBuf::try_from(ebpf.map_mut("DATA").unwrap())?;
@@ -67,30 +66,23 @@ async fn main() -> anyhow::Result<()> {
     poll.registry()
         .register(&mut SourceFd(&raw_fd), Token(0), Interest::READABLE)?;
 
-    /*
-    let token = CancellationToken::new();
-    println!("Waiting for Ctrl-C...");
-    tokio::spawn(async move {
-        signal::ctrl_c().await.unwrap();
-        println!("Exiting...");
-    });
-    */
+    //TODO: let token = CancellationToken::new();
     loop {
         poll.poll(&mut events, None)?;
         for event in &events {
             debug!("event token: {:?}", event.token());
             if event.token() == Token(0) && event.is_readable() {
                 if let Some(item) = ring.next() {
-                    debug!("item {:?}", &*item);
+                    if item.len() < 4 {
+                        continue;
+                    }
+                    let mut src_ip: [u8; 4] = [0; 4];
+                    let data: &[u8] = item.as_ref();
+                    src_ip[..4].copy_from_slice(&data[..4]);
+                    let ip = Ipv4Addr::from_bits(u32::from_le_bytes(src_ip));
+                    debug!("From tc-ebpf: {}", ip.to_string());
                 }
-                return Ok(());
             }
         }
-        //if let Some(item) = ring.next() {
-        //   info!("item: {:?}", &*item);
-        // }
     }
-    let _ = signal::ctrl_c().await;
-
-    Ok(())
 }

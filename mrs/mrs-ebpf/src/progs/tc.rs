@@ -31,7 +31,7 @@ pub fn tc_egress(ctx: TcContext) -> i32 {
     match try_tc_egress(ctx) {
         Ok(ret) => ret,
         Err(_) => TC_ACT_SHOT,
-    }
+    }unsafe{*ipmacmap_len}
 }
 
 fn block_ip(address: u32) -> bool {
