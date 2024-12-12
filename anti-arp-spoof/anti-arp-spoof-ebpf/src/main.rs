@@ -24,18 +24,19 @@ pub fn anti_arp_spoof(ctx: TcContext) -> i32 {
 }
 
 fn try_anti_arp_spoof(ctx: &TcContext) -> Result<i32, ()> {
-    info!(ctx, "received a packet");
     let ethhdr: EthHdr = ctx.load(0).map_err(|_| ())?;
     match ethhdr.ether_type {
         EtherType::Ipv4  => {},
-        _ => { return Ok(TC_ACT_OK); }
+        _ => {
+            return Ok(TC_ACT_OK); }
     }
     let ipv4hdr: Ipv4Hdr = ctx.load(EthHdr::LEN).map_err(|_| ())?;
     if ipv4hdr.proto != IpProto::Udp {
         return Ok(TC_ACT_OK);
     }
     let udphdr: UdpHdr = ctx.load(EthHdr::LEN + Ipv4Hdr::LEN).map_err(|_| ())?;
-    if !(u16::from_be(udphdr.source) != 67 || u16::from_be(udphdr.dest) != 68) {
+    if (u16::from_be(udphdr.source) != 67 || u16::from_be(udphdr.dest) != 68) {
+        debug!(ctx, "Not correct udp ports");
         return Ok(TC_ACT_OK);
     }
     let dhcphdr: DhcpHdr = ctx.load(EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN).map_err(|_| ())?;
@@ -44,7 +45,7 @@ fn try_anti_arp_spoof(ctx: &TcContext) -> Result<i32, ()> {
     }
     debug!(ctx, "sending dhcp packet");
     let first_opt: [u8; 4] = ctx.load(EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + DhcpHdr::LEN).map_err(|_| ())?;
-    if !(first_opt[0] != 0x35 || first_opt[2] != 0x5) {
+    if (first_opt[0] != 0x35 || first_opt[2] != 0x5) {
         return Ok(TC_ACT_OK);
     }
     let mut chmac: [u8; 6] = [0; 6];
