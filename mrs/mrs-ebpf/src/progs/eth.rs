@@ -154,34 +154,7 @@ fn try_eth(ctx: &XdpContext) -> Result<u32, u32> {
         }
     }
 
-    let iphdr = ptr_at_mut::<Ipv4Hdr>(ctx, EthHdr::LEN).ok_or(xdp_action::XDP_PASS)?;
-
-    /*
-    if is_auto {
-        unsafe {
-            let ihl: u8 = (*iphdr).ihl();
-            if ihl >= 6 {
-                debug!(ctx, "ihl: {}", ihl);
-                //NOTE:  Do we want ok_or to pass here? I don't think so.. we want redirects.
-                let handover_flag = ptr_at_mut::<HandoverHdr>(ctx, EthHdr::LEN + Ipv4Hdr::LEN)
-                    .ok_or(xdp_action::XDP_PASS)?;
-                debug!(ctx, "handover flag? {}", (*handover_flag).medium_sel);
-                match (*handover_flag).medium_sel {
-                    3 => {
-                        info!(ctx, "switched to light medium");
-                        medium_selection = MediumSelection::Light
-                    }
-                    7 => {
-                        info!(ctx, "switched to radio medium");
-                        medium_selection = MediumSelection::Radio
-                    }
-                    _ => {}
-                };
-            }
-        }
-    }
-    */
-
+    return Ok(xdp_action::XDP_PASS);
     match unsafe { (*iphdr).proto } {
         IpProto::Tcp => {
             let tcphdr = ptr_at_mut::<TcpHdr>(ctx, EthHdr::LEN + Ipv4Hdr::LEN)
@@ -199,29 +172,5 @@ fn try_eth(ctx: &XdpContext) -> Result<u32, u32> {
 
         _ => return Ok(xdp_action::XDP_PASS),
     };
-
-    /*
-    unsafe {
-        // do cheksum calculation first before rewriting old ip
-        update_ipv4_csum(&mut (*iphdr).check, (*iphdr).dst_addr, client.ip);
-        (*iphdr).dst_addr = client.ip;
-        (*ethhdr).dst_addr = client.mac;
-    }
-    */
-
-    //determine if we are redirecting based off handover packet or manually set by user
-    /*
-    return match medium_selection {
-        MediumSelection::Radio => unsafe {
-            //debug!(ctx, "sending to plc");
-            (*ethhdr).src_addr = ifaces.plc_iface.mac;
-            Ok(bpf_redirect(ifaces.plc_iface.idx, 0) as u32)
-        },
-        MediumSelection::Light => unsafe {
-            //debug!(ctx, "sending to wifi");
-            Ok(bpf_redirect(ifaces.wifi_iface.idx, 0) as u32)
-        },
-    };
-    */
     return Ok(xdp_action::XDP_PASS);
 }

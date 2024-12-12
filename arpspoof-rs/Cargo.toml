@@ -1,7 +1,0 @@
-[package]
-name = "arpspoof-rs"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-pnet = "0.35.0"

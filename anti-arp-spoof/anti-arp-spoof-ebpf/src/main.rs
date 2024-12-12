@@ -79,6 +79,7 @@ fn try_anti_arp_spoof(ctx: &TcContext) -> Result<i32, ()> {
     let client = unsafe {CLIENTS.get_ptr_mut(*clients_size).ok_or(TC_ACT_OK).unwrap()};
     unsafe {(*client).mac = chmac};
     unsafe {(*client).ip = dhcphdr.yiaddr}
+    debug!(ctx, "added to table");
     //unsafe {(*client).mac.copy_from_slice(&dhc)}
     Ok(TC_ACT_OK)
 }

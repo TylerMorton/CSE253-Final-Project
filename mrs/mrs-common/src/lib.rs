@@ -31,37 +31,6 @@ pub struct IpMacMap {
     pub mac: [u8; 6],
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct HandoverParams {
-    pub val: u8,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct HandoverHdr {
-    pub medium_sel: u8,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub enum MediumSelection {
-    Light,
-    Radio,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub enum HandoverMode {
-    Auto(MediumSelection),
-    Manual(MediumSelection),
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct UserParams {
-    pub handover_mode: HandoverMode,
-}
 
 #[cfg(feature = "user")]
 unsafe impl aya::Pod for IfaceMap {}
@@ -72,8 +41,3 @@ unsafe impl aya::Pod for ClientMap {}
 #[cfg(feature ="user")]
 unsafe impl aya::Pod for IpMacMap {}
 
-#[cfg(feature = "user")]
-unsafe impl aya::Pod for HandoverParams {}
-
-#[cfg(feature = "user")]
-unsafe impl aya::Pod for UserParams {}
