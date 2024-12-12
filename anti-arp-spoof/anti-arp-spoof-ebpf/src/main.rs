@@ -10,7 +10,7 @@ use aya_ebpf::{
     maps::Array
 };
 use aya_log_ebpf::{info, debug};
-
+use anti_arp_spoof_common::Client;
 use network_types::{
     eth::{EtherType, EthHdr},
     ip::{Ipv4Hdr, IpProto},
@@ -22,18 +22,11 @@ use dhcp::DhcpHdr;
 
 pub const DHCP_MAGIC: u32 = 0x63825363;
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct Client {
-    pub mac: [u8; 6],
-    pub ip: u32
-}
+#[map]
+static CLIENTS: Array<Client> = Array::with_max_entries(100, 0);
 
 #[map]
-pub static CLIENTS: Array<Client> = Array::with_max_entries(100, 0);
-
-#[map]
-pub static CLIENTS_SIZE: Array<u32> = Array::with_max_entries(1, 0);
+static CLIENTS_SIZE: Array<u32> = Array::with_max_entries(1, 0);
 
 #[classifier]
 pub fn anti_arp_spoof(ctx: TcContext) -> i32 {
@@ -71,14 +64,14 @@ fn try_anti_arp_spoof(ctx: &TcContext) -> Result<i32, ()> {
     let mut chmac: [u8; 6] = [0; 6];
     chmac.copy_from_slice(&dhcphdr.chaddr[0..6]);
     debug!(ctx, "mac registered: {:X}{:X}{:X}{:X}{:X}{:X}", chmac[0], chmac[1], chmac[2], chmac[3], chmac[4], chmac[5]);
-    let clients_size = CLIENTS_SIZE.get_ptr_mut(0).ok_or(TC_ACT_OK).unwrap();
-    if unsafe {*clients_size} > 100 {
-        debug!(ctx, "client list full");
-        return Ok(TC_ACT_OK);
-    }
-    let client = unsafe {CLIENTS.get_ptr_mut(*clients_size).ok_or(TC_ACT_OK).unwrap()};
-    unsafe {(*client).mac = chmac};
-    unsafe {(*client).ip = dhcphdr.yiaddr}
+    //let clients_size = CLIENTS_SIZE.get_ptr_mut(0).ok_or(TC_ACT_OK).unwrap();
+    //if unsafe {*clients_size} > 100 {
+    //    debug!(ctx, "client list full");
+    //    return Ok(TC_ACT_OK);
+    //}
+    //let client = unsafe {CLIENTS.get_ptr_mut(*clients_size).ok_or(TC_ACT_OK).unwrap()};
+    //unsafe {(*client).mac = chmac};
+    //unsafe {(*client).ip = dhcphdr.yiaddr}
     debug!(ctx, "added to table");
     //unsafe {(*client).mac.copy_from_slice(&dhc)}
     Ok(TC_ACT_OK)
