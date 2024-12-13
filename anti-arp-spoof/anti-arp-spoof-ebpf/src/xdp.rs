@@ -10,7 +10,7 @@ use crate::ptrs::ptr_at_mut;
 use crate::tc::{CLIENTS, CLIENTS_SIZE};
 
 #[xdp]
-pub fn fullmrs_xdp(ctx: XdpContext) -> u32 {
+pub fn anti_arp_spoof_xdp(ctx: XdpContext) -> u32 {
     match try_fullmrs(&ctx) {
         Ok(ret) => ret,
         Err(_) => xdp_action::XDP_ABORTED,
@@ -21,7 +21,7 @@ fn try_fullmrs(ctx: &XdpContext) -> Result<u32, u32> {
     let ethhdr = ptr_at_mut::<EthHdr>(ctx, 0).ok_or(xdp_action::XDP_PASS)?;
 
     match unsafe { (*ethhdr).ether_type } {
-        EtherType::Arp => {},
+        EtherType::Arp => {}
         _ => {
             debug!(ctx, "Not supporting this protocol");
             return Ok(xdp_action::XDP_PASS);
@@ -39,12 +39,16 @@ fn try_fullmrs(ctx: &XdpContext) -> Result<u32, u32> {
     }
     if oper == 2 {
         let client_size = CLIENTS_SIZE.get_ptr(0).ok_or(xdp_action::XDP_PASS)?;
-        for i in 0..unsafe {*client_size} {
-            let client = CLIENTS.get_ptr(i).ok_or(xdp_action::XDP_PASS)?;
-            unsafe { if (*client).ip == u32::from_be_bytes((*arphdr).spa) && (*client).mac != (*arphdr).sha {
-                debug!(ctx, "SPOOFING DETECTED!");
-                return Ok(xdp_action::XDP_DROP);
-            }
+        let client_size = unsafe { *client_size };
+        for i in 0..100 {
+            let client = CLIENTS.get_ptr(client_size).ok_or(xdp_action::XDP_PASS)?;
+            unsafe {
+                if (*client).ip == u32::from_be_bytes((*arphdr).spa)
+                    && (*client).mac != (*arphdr).sha
+                {
+                    debug!(ctx, "SPOOFING DETECTED!");
+                    return Ok(xdp_action::XDP_DROP);
+                }
             }
         }
     }

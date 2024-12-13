@@ -1,6 +1,6 @@
-use aya::programs::{tc, SchedClassifier, TcAttachType};
-use aya::maps::Array;
 use anti_arp_spoof_common::Client;
+use aya::maps::Array;
+use aya::programs::{tc, SchedClassifier, TcAttachType, Xdp, XdpFlags};
 use clap::Parser;
 #[rustfmt::skip]
 use log::{debug, warn};
@@ -45,9 +45,14 @@ async fn main() -> anyhow::Result<()> {
     // error adding clsact to the interface if it is already added is harmless
     // the full cleanup can be done with 'sudo tc qdisc del dev eth0 clsact'.
     let _ = tc::qdisc_add_clsact(&iface);
-    let program: &mut SchedClassifier = ebpf.program_mut("anti_arp_spoof").unwrap().try_into()?;
+    let program: &mut SchedClassifier =
+        ebpf.program_mut("anti_arp_spoof_tc").unwrap().try_into()?;
     program.load()?;
     program.attach(&iface, TcAttachType::Egress)?;
+
+    let program: &mut Xdp = ebpf.program_mut("anti_arp_spoof_xdp").unwrap().try_into()?;
+    program.load()?;
+    program.attach(&iface, XdpFlags::default());
 
     let mut client_size: Array<_, u32> = Array::try_from(ebpf.map_mut("CLIENTS_SIZE").unwrap())?;
     client_size.set(0, 0, 0)?;

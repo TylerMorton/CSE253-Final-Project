@@ -1,9 +1,6 @@
 use core::mem;
 
-use aya_ebpf::programs::{
-    XdpContext,
-    TcContext
-};
+use aya_ebpf::programs::{TcContext, XdpContext};
 
 #[inline(always)]
 pub fn tc_ptr_at<T>(ctx: &TcContext, offset: usize) -> Option<*const T> {
